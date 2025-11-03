@@ -34,8 +34,6 @@ public class HighsModel extends BaseModel {
     
     @Override
     public Solution solve(SolverParams params) {
-        long startTime = System.currentTimeMillis();
-        
         if (!modelBuilt) {
             buildInitialModel();
         }
@@ -49,6 +47,7 @@ public class HighsModel extends BaseModel {
         }
         
         // Solve
+		long startTime = System.currentTimeMillis();
         HighsStatus status = highs.run();
         
         lastSolveTimeMs = System.currentTimeMillis() - startTime;
@@ -208,11 +207,14 @@ public class HighsModel extends BaseModel {
         
         // Threads
         if (params.getThreads() > 0) {
-            highs.setOptionValue("threads", params.getThreads());
+            HighsStatus status = highs.setOptionValue("threads", params.getThreads());
+			if (status != HighsStatus.OK) {
+				throw new RuntimeException("Failed to set threads option: " + status);
+			}
         }
         
         // Presolve
-        highs.setOptionValue("presolve", params.isPresolve() ? "on" : "off");
+        highs.setOptionValue("presolve", params.getPresolve().equals("auto") ? "choose" : params.getPresolve());
         
         // Output level
         highs.setOptionValue("output_flag", params.getOutputLevel() > 0);

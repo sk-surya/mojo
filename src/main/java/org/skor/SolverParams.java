@@ -9,14 +9,14 @@ import java.util.Map;
 public class SolverParams {
     private double timeLimit = Double.POSITIVE_INFINITY;
     private double gapTolerance = 1e-4;
-    private double feasibilityTolerance = 1e-6;
-    private double optimalityTolerance = 1e-6;
+    private double feasibilityTolerance = 1e-7;
+    private double optimalityTolerance = 1e-7;
     private int threads = 0; // 0 = auto
     private int iterationLimit = Integer.MAX_VALUE;
     private int nodeLimit = Integer.MAX_VALUE;
     private int solutionLimit = Integer.MAX_VALUE;
-    private boolean presolve = true;
-    private int outputLevel = 0; // 0 = silent, 1 = normal, 2 = verbose
+    private String presolve = "auto";		// "on", "off", "auto"
+    private int outputLevel = 1; // 0 = silent, 1 = normal, 2 = verbose
     private boolean warmStart = false;
     private Map<String, Object> solverSpecific = new HashMap<>();
     
@@ -60,9 +60,13 @@ public class SolverParams {
         this.solutionLimit = limit;
         return this;
     }
-    
-    public SolverParams withPresolve(boolean enabled) {
-        this.presolve = enabled;
+
+    public SolverParams withPresolve(String mode) {
+		mode = mode.toLowerCase();
+        if (!mode.equals("on") && !mode.equals("off") && !mode.equals("auto")) {
+            throw new IllegalArgumentException("Invalid presolve mode: " + mode);
+        }
+        this.presolve = mode;
         return this;
     }
     
@@ -90,7 +94,7 @@ public class SolverParams {
     public int getIterationLimit() { return iterationLimit; }
     public int getNodeLimit() { return nodeLimit; }
     public int getSolutionLimit() { return solutionLimit; }
-    public boolean isPresolve() { return presolve; }
+    public String getPresolve() { return presolve; }
     public int getOutputLevel() { return outputLevel; }
     public boolean isWarmStart() { return warmStart; }
     public Map<String, Object> getSolverSpecific() { return solverSpecific; }
@@ -100,7 +104,7 @@ public class SolverParams {
         return new SolverParams()
             .withTimeLimit(60)
             .withGapTolerance(0.01)
-            .withPresolve(true)
+            .withPresolve("auto")
             .withThreads(0);
     }
     
@@ -108,7 +112,7 @@ public class SolverParams {
         return new SolverParams()
             .withTimeLimit(300)
             .withGapTolerance(0.001)
-            .withPresolve(true)
+            .withPresolve("auto")
             .withThreads(0);
     }
     
@@ -117,7 +121,7 @@ public class SolverParams {
             .withGapTolerance(1e-9)
             .withFeasibilityTolerance(1e-9)
             .withOptimalityTolerance(1e-9)
-            .withPresolve(true)
+            .withPresolve("auto")
             .withThreads(0);
     }
 }
