@@ -1,7 +1,7 @@
 package org.skor;
 
 // import com.milp.core.*;
-import gurobi.*;
+//import gurobi.*;
 import java.util.*;
 
 /**
@@ -518,6 +518,11 @@ public class GurobiModel extends BaseModel {
     
     @Override
     public void writeMPS(String filename) {
+        throw new UnsupportedOperationException("Gurobi support requires Gurobi license and JAR");
+    }
+
+    @Override
+    public void setWarmStartSolution(Map<Variable, Double>  warmStartSolution) {
         throw new UnsupportedOperationException("Gurobi support requires Gurobi license and JAR");
     }
 }

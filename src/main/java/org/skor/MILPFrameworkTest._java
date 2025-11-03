@@ -1,0 +1,351 @@
+package org.skor;
+
+//import com.milp.core.*;
+import org.skor.HighsModel;
+import org.junit.jupiter.api.*;
+import static org.assertj.core.api.Assertions.*;
+import java.util.*;
+
+/**
+ * Unit tests for the MILP framework
+ */
+public class MILPFrameworkTest {
+    
+    private Model model;
+    
+    @BeforeEach
+    void setUp() {
+        model = new HighsModel();
+    }
+    
+    @AfterEach
+    void tearDown() {
+        if (model instanceof HighsModel) {
+            ((HighsModel) model).dispose();
+        }
+    }
+    
+    @Test
+    void testSimpleLP() {
+        // Create a simple 2-variable LP
+        Variable x = model.addVariable("x", 0, 10, Model.VarType.CONTINUOUS);
+        Variable y = model.addVariable("y", 0, 10, Model.VarType.CONTINUOUS);
+        
+        // Maximize 3x + 2y
+        model.setObjective(
+            Expression.of(x, 3).plus(y, 2),
+            Model.OptimizationSense.MAXIMIZE
+        );
+        
+        // Subject to: x + y <= 8
+        model.addConstraint(
+            Expression.of(x).plus(y),
+            Model.ConstraintType.LESS_EQUAL,
+            8
+        );
+        
+        // And: 2x + y <= 14
+        model.addConstraint(
+            Expression.of(x, 2).plus(y),
+            Model.ConstraintType.LESS_EQUAL,
+            14
+        );
+        
+        Solution solution = model.solve();
+        
+        assertThat(solution.isOptimal()).isTrue();
+        assertThat(solution.getObjectiveValue()).isCloseTo(26.0, within(0.001));
+        assertThat(solution.getValue(x)).isCloseTo(6.0, within(0.001));
+        assertThat(solution.getValue(y)).isCloseTo(2.0, within(0.001));
+    }
+    
+    @Test
+    void testIntegerProgramming() {
+        // Binary knapsack problem
+        double[] values = {10, 13, 18, 31, 7};
+        double[] weights = {11, 15, 20, 35, 10};
+        double capacity = 47;
+        
+        Variable[] items = new Variable[values.length];
+        Expression objective = new Expression();
+        Expression constraint = new Expression();
+        
+        for (int i = 0; i < values.length; i++) {
+            items[i] = model.addVariable("item" + i, 0, 1, Model.VarType.BINARY);
+            objective.plus(items[i], values[i]);
+            constraint.plus(items[i], weights[i]);
+        }
+        
+        model.setObjective(objective, Model.OptimizationSense.MAXIMIZE);
+        model.addConstraint(constraint, Model.ConstraintType.LESS_EQUAL, capacity);
+        
+        Solution solution = model.solve();
+        
+        assertThat(solution.isOptimal()).isTrue();
+        
+        // Check solution is binary
+        for (Variable item : items) {
+            double value = solution.getValue(item);
+            assertThat(value).isIn(0.0, 1.0);
+        }
+        
+        // Verify constraint is satisfied
+        double totalWeight = 0;
+        for (int i = 0; i < items.length; i++) {
+            totalWeight += solution.getValue(items[i]) * weights[i];
+        }
+        assertThat(totalWeight).isLessThanOrEqualTo(capacity);
+    }
+    
+    @Test
+    void testIncrementalVariableBoundUpdate() {
+        Variable x = model.addVariable("x", 0, 10, Model.VarType.CONTINUOUS);
+        Variable y = model.addVariable("y", 0, 10, Model.VarType.CONTINUOUS);
+        
+        model.setObjective(
+            Expression.of(x, 1).plus(y, 1),
+            Model.OptimizationSense.MAXIMIZE
+        );
+        
+        Solution sol1 = model.solve();
+        assertThat(sol1.getObjectiveValue()).isCloseTo(20.0, within(0.001));
+        
+        // Update bounds
+        model.updateVariableBounds(x, 0, 5);
+        
+        Solution sol2 = model.solve();
+        assertThat(sol2.getObjectiveValue()).isCloseTo(15.0, within(0.001));
+        assertThat(sol2.getValue(x)).isCloseTo(5.0, within(0.001));
+        assertThat(sol2.getValue(y)).isCloseTo(10.0, within(0.001));
+    }
+    
+    @Test
+    void testIncrementalConstraintUpdate() {
+        Variable x = model.addVariable("x", 0, 100, Model.VarType.CONTINUOUS);
+        Variable y = model.addVariable("y", 0, 100, Model.VarType.CONTINUOUS);
+        
+        model.setObjective(
+            Expression.of(x, 1).plus(y, 1),
+            Model.OptimizationSense.MAXIMIZE
+        );
+        
+        Constraint con = model.addConstraint(
+            Expression.of(x).plus(y),
+            Model.ConstraintType.LESS_EQUAL,
+            50
+        );
+        
+        Solution sol1 = model.solve();
+        assertThat(sol1.getObjectiveValue()).isCloseTo(50.0, within(0.001));
+        
+        // Relax constraint
+        model.updateConstraintRHS(con, 75);
+        
+        Solution sol2 = model.solve();
+        assertThat(sol2.getObjectiveValue()).isCloseTo(75.0, within(0.001));
+    }
+    
+    @Test
+    void testBatchUpdates() {
+        int n = 100;
+        Variable[] vars = new Variable[n];
+        
+        model.beginUpdate();
+        
+        for (int i = 0; i < n; i++) {
+            vars[i] = model.addVariable(0, 10, Model.VarType.CONTINUOUS);
+        }
+        
+        Expression objective = new Expression();
+        for (Variable var : vars) {
+            objective.plus(var, 1);
+        }
+        model.setObjective(objective, Model.OptimizationSense.MAXIMIZE);
+        
+        model.endUpdate();
+        
+        Solution sol1 = model.solve();
+        assertThat(sol1.getObjectiveValue()).isCloseTo(1000.0, within(0.001));
+        
+        // Batch update bounds
+        model.beginUpdate();
+        for (int i = 0; i < n / 2; i++) {
+            model.updateVariableBounds(vars[i], 0, 5);
+        }
+        model.endUpdate();
+        
+        Solution sol2 = model.solve();
+        assertThat(sol2.getObjectiveValue()).isCloseTo(750.0, within(0.001));
+    }
+    
+    @Test
+    void testExpressionBuilder() {
+        Variable x = model.addVariable("x", 0, 10, Model.VarType.CONTINUOUS);
+        Variable y = model.addVariable("y", 0, 10, Model.VarType.CONTINUOUS);
+        Variable z = model.addVariable("z", 0, 10, Model.VarType.CONTINUOUS);
+        
+        // Test various expression building patterns
+        Expression expr1 = Expression.of(x, 2).plus(y, 3).minus(z, 1);
+        assertThat(expr1.getCoefficient(x)).isEqualTo(2.0);
+        assertThat(expr1.getCoefficient(y)).isEqualTo(3.0);
+        assertThat(expr1.getCoefficient(z)).isEqualTo(-1.0);
+        
+        Expression expr2 = Expression.sum(x, y, z);
+        assertThat(expr2.size()).isEqualTo(3);
+        assertThat(expr2.getCoefficient(x)).isEqualTo(1.0);
+        
+        Expression expr3 = new Expression().plus(x).times(5);
+        assertThat(expr3.getCoefficient(x)).isEqualTo(5.0);
+        
+        Expression expr4 = expr1.plus(expr2);
+        assertThat(expr4.getCoefficient(x)).isEqualTo(3.0);
+        assertThat(expr4.getCoefficient(y)).isEqualTo(4.0);
+        assertThat(expr4.getCoefficient(z)).isEqualTo(0.0);
+    }
+    
+    @Test
+    void testRangeConstraints() {
+        Variable x = model.addVariable("x", 0, 100, Model.VarType.CONTINUOUS);
+        
+        model.setObjective(Expression.of(x), Model.OptimizationSense.MAXIMIZE);
+        
+        // 10 <= x <= 20
+        model.addRangeConstraint("range", Expression.of(x), 10, 20);
+        
+        Solution solution = model.solve();
+        assertThat(solution.isOptimal()).isTrue();
+        assertThat(solution.getValue(x)).isCloseTo(20.0, within(0.001));
+    }
+    
+    @Test
+    void testInfeasibleModel() {
+        Variable x = model.addVariable("x", 0, 10, Model.VarType.CONTINUOUS);
+        
+        // Conflicting constraints
+        model.addConstraint(Expression.of(x), Model.ConstraintType.GREATER_EQUAL, 15);
+        model.addConstraint(Expression.of(x), Model.ConstraintType.LESS_EQUAL, 5);
+        
+        Solution solution = model.solve();
+        assertThat(solution.getStatus()).isEqualTo(Solution.Status.INFEASIBLE);
+        assertThat(solution.isFeasible()).isFalse();
+    }
+    
+    @Test
+    void testUnboundedModel() {
+        Variable x = model.addVariable("x", 0, Double.POSITIVE_INFINITY, 
+                                       Model.VarType.CONTINUOUS);
+        
+        model.setObjective(Expression.of(x), Model.OptimizationSense.MAXIMIZE);
+        
+        Solution solution = model.solve();
+        assertThat(solution.getStatus()).isEqualTo(Solution.Status.UNBOUNDED);
+    }
+    
+    @Test
+    void testSolverParameters() {
+        // Create a complex model that takes time to solve
+        int n = 1000;
+        Variable[] vars = new Variable[n];
+        
+        for (int i = 0; i < n; i++) {
+            vars[i] = model.addVariable(0, 1, Model.VarType.BINARY);
+        }
+        
+        Expression objective = new Expression();
+        Random rand = new Random(42);
+        for (Variable var : vars) {
+            objective.plus(var, rand.nextDouble());
+        }
+        model.setObjective(objective, Model.OptimizationSense.MAXIMIZE);
+        
+        // Add random constraints
+        for (int i = 0; i < n / 2; i++) {
+            Expression constraint = new Expression();
+            for (int j = 0; j < 10; j++) {
+                constraint.plus(vars[rand.nextInt(n)], rand.nextDouble());
+            }
+            model.addConstraint(constraint, Model.ConstraintType.LESS_EQUAL, 5);
+        }
+        
+        // Solve with time limit
+        Solution solution = model.solve(
+            new SolverParams()
+                .withTimeLimit(0.1)  // 100ms time limit
+                .withGapTolerance(0.05)
+        );
+        
+        // Should terminate early due to time limit
+        assertThat(solution.getSolveTimeMs()).isLessThan(500);
+    }
+    
+    @Test
+    void testModelStatistics() {
+        int numVars = 50;
+        int numCons = 30;
+        
+        Variable[] vars = new Variable[numVars];
+        for (int i = 0; i < numVars; i++) {
+            vars[i] = model.addVariable(0, 100, 
+                i % 5 == 0 ? Model.VarType.INTEGER : Model.VarType.CONTINUOUS);
+        }
+        
+        Random rand = new Random(42);
+        for (int i = 0; i < numCons; i++) {
+            Expression expr = new Expression();
+            for (int j = 0; j < 5; j++) {
+                expr.plus(vars[rand.nextInt(numVars)], rand.nextDouble());
+            }
+            model.addConstraint(expr, Model.ConstraintType.LESS_EQUAL, 100);
+        }
+        
+        Model.ModelStats stats = model.getStatistics();
+        
+        assertThat(stats.numVariables).isEqualTo(numVars);
+        assertThat(stats.numConstraints).isEqualTo(numCons);
+        assertThat(stats.numIntegers).isEqualTo(10);  // Every 5th variable
+        assertThat(stats.numNonZeros).isGreaterThan(0);
+    }
+    
+    @Test
+    void testVariableRemoval() {
+        Variable x = model.addVariable("x", 0, 10, Model.VarType.CONTINUOUS);
+        Variable y = model.addVariable("y", 0, 10, Model.VarType.CONTINUOUS);
+        
+        model.setObjective(
+            Expression.of(x, 2).plus(y, 3),
+            Model.OptimizationSense.MAXIMIZE
+        );
+        
+        assertThat(model.getNumVariables()).isEqualTo(2);
+        
+        model.removeVariable(x);
+        
+        assertThat(model.getNumVariables()).isEqualTo(1);
+        
+        Solution solution = model.solve();
+        assertThat(solution.getObjectiveValue()).isCloseTo(30.0, within(0.001));
+        assertThat(solution.getValue(y)).isCloseTo(10.0, within(0.001));
+    }
+    
+    @Test
+    void testConstraintRemoval() {
+        Variable x = model.addVariable("x", 0, 100, Model.VarType.CONTINUOUS);
+        
+        model.setObjective(Expression.of(x), Model.OptimizationSense.MAXIMIZE);
+        
+        Constraint c1 = model.addConstraint(
+            Expression.of(x), Model.ConstraintType.LESS_EQUAL, 50
+        );
+        Constraint c2 = model.addConstraint(
+            Expression.of(x), Model.ConstraintType.LESS_EQUAL, 30
+        );
+        
+        Solution sol1 = model.solve();
+        assertThat(sol1.getValue(x)).isCloseTo(30.0, within(0.001));
+        
+        model.removeConstraint(c2);
+        
+        Solution sol2 = model.solve();
+        assertThat(sol2.getValue(x)).isCloseTo(50.0, within(0.001));
+    }
+}
