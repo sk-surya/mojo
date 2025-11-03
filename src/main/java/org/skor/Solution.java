@@ -1,5 +1,9 @@
 package org.skor;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import java.io.File;
+import java.io.IOException;
 import java.util.*;
 
 /**
@@ -154,5 +158,63 @@ public class Solution {
         }
         sb.append("]");
         return sb.toString();
+    }
+
+    /**
+     * Save solution to a JSON file for later warm-start
+     * 
+     * @param filename Path to save the solution file
+     * @throws IOException if file write fails
+     */
+    public void saveToFile(String filename) throws IOException {
+        ObjectMapper mapper = new ObjectMapper();
+        mapper.enable(SerializationFeature.INDENT_OUTPUT);
+        
+        // Build a serializable data structure
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("status", status.name());
+        data.put("objectiveValue", objectiveValue);
+        data.put("gap", gap);
+        data.put("solveTimeMs", solveTimeMs);
+        data.put("iterations", iterations);
+        data.put("nodeCount", nodeCount);
+        
+        // Convert variable values to name->value map
+        Map<String, Double> varValues = new LinkedHashMap<>();
+        for (Map.Entry<Variable, Double> entry : variableValues.entrySet()) {
+            varValues.put(entry.getKey().getName(), entry.getValue());
+        }
+        data.put("variableValues", varValues);
+        
+        mapper.writeValue(new File(filename), data);
+    }
+    
+    /**
+     * Load variable values from a JSON file
+     * Returns a map of variable name to value that can be used with setWarmStartSolution()
+     * 
+     * @param filename Path to the solution file
+     * @param model Model containing the variables
+     * @return Map of variables to their saved values
+     * @throws IOException if file read fails
+     */
+    @SuppressWarnings("unchecked")
+    public static Map<Variable, Double> loadFromFile(String filename, Model model) throws IOException {
+        ObjectMapper mapper = new ObjectMapper();
+        Map<String, Object> data = mapper.readValue(new File(filename), Map.class);
+        
+        Map<Variable, Double> values = new HashMap<>();
+        Map<String, Number> varValues = (Map<String, Number>) data.get("variableValues");
+        
+        if (varValues != null) {
+            for (Map.Entry<String, Number> entry : varValues.entrySet()) {
+                Variable var = model.getVariableByName(entry.getKey());
+                if (var != null) {
+                    values.put(var, entry.getValue().doubleValue());
+                }
+            }
+        }
+        
+        return values;
     }
 }

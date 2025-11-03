@@ -13,6 +13,7 @@ public interface Model {
     Variable addVariable(double lb, double ub, VarType type); // auto-named
     void updateVariableBounds(Variable var, double lb, double ub);
     void removeVariable(Variable var);
+    Variable getVariableByName(String name); // Get variable by name
     
     // Constraint management
     Constraint addConstraint(String name, Expression expr, ConstraintType type, double rhs);
@@ -33,6 +34,7 @@ public interface Model {
     // Solving
     Solution solve();
     Solution solve(SolverParams params);
+    void setWarmStartSolution(Map<Variable, Double> solution); // Set warm start values
     
     // Model inspection
     int getNumVariables();

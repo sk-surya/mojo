@@ -82,6 +82,7 @@ public class HighsModel extends BaseModel {
         double[] colUpper = new double[numVars];
         HighsVarType[] integrality = new HighsVarType[numVars];
         
+		boolean isMip = false;
         for (int i = 0; i < numVars; i++) {
             Variable var = activeVars.get(i);
             varToHighsIndex.put(var, i);
@@ -97,9 +98,11 @@ public class HighsModel extends BaseModel {
                     break;
                 case INTEGER:
                     integrality[i] = HighsVarType.kInteger;
+                    isMip = true;
                     break;
                 case BINARY:
                     integrality[i] = HighsVarType.kInteger;
+					isMip = true;
                     colLower[i] = Math.max(0, colLower[i]);
                     colUpper[i] = Math.min(1, colUpper[i]);
                     break;
@@ -185,7 +188,7 @@ public class HighsModel extends BaseModel {
             aStart.stream().mapToInt(Integer::intValue).toArray(),
             aIndex.stream().mapToInt(Integer::intValue).toArray(),
             aValue.stream().mapToDouble(Double::doubleValue).toArray(),
-            integrality
+            isMip ? integrality : null
         );
         
         modelBuilt = true;
@@ -235,6 +238,10 @@ public class HighsModel extends BaseModel {
             }
         }
     }
+
+	public void setWarmStartSolution(Map<Variable, Double> solution) {
+		this.warmStartSolution = solution;
+	}
     
     private void applyWarmStart() {
         if (warmStartSolution == null || warmStartSolution.isEmpty()) return;
