@@ -10,6 +10,7 @@ public abstract class BaseModel implements Model {
     
     // Model structure
     protected final List<Variable> variables = new ArrayList<>();
+    protected final Map<String, Variable> variablesByName = new HashMap<>();
     protected final Map<Variable, Double> objectiveCoeffs = new HashMap<>();
     protected final List<Constraint> constraints = new ArrayList<>();
     protected final Map<Constraint, Map<Variable, Double>> constraintMatrix = new HashMap<>();
@@ -38,6 +39,7 @@ public abstract class BaseModel implements Model {
     public Variable addVariable(String name, double lb, double ub, VarType type) {
         Variable var = new Variable(variables.size(), name, lb, ub, type);
         variables.add(var);
+        variablesByName.put(name, var);
         
         if (!inBatchUpdate) {
             onVariableAdded(var);
@@ -72,6 +74,7 @@ public abstract class BaseModel implements Model {
         if (deletedVariables.contains(var)) return;
         
         deletedVariables.add(var);
+        variablesByName.remove(var.getName());
         
         // Remove from objective
         objectiveCoeffs.remove(var);
@@ -324,5 +327,12 @@ public abstract class BaseModel implements Model {
             }
         }
         return active;
+    }
+    
+    @Override
+    public Variable getVariableByName(String name) {
+        Variable var = variablesByName.get(name);
+        // Return null if variable was deleted
+        return (var != null && !deletedVariables.contains(var)) ? var : null;
     }
 }
